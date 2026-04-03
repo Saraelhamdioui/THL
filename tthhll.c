@@ -39,9 +39,11 @@ typedef struct {
 
 char *dupliquerChaine(const char *s) {
     char *p = (char *)malloc(strlen(s) + 1);
-    if (p != NULL) {
-        strcpy(p, s);
+    if (p == NULL) {
+        printf("Erreur memoire.\n");
+        exit(1);
     }
+    strcpy(p, s);
     return p;
 }
 
@@ -78,7 +80,6 @@ void libererAutomate(Automate *a) {
     libererTableauChaines(a->etats, a->nbEtats);
     libererTableauChaines(a->alphabet, a->nbAlphabet);
     libererTableauChaines(a->etatsFinaux, a->nbFinaux);
-
     free(a->transitions);
 
     a->etats = NULL;
@@ -86,8 +87,16 @@ void libererAutomate(Automate *a) {
     a->etatsFinaux = NULL;
     a->transitions = NULL;
 
-    a->nbEtats = a->nbAlphabet = a->nbTransitions = a->nbFinaux = 0;
-    a->capEtats = a->capAlphabet = a->capTransitions = a->capFinaux = 0;
+    a->nbEtats = 0;
+    a->nbAlphabet = 0;
+    a->nbTransitions = 0;
+    a->nbFinaux = 0;
+
+    a->capEtats = 0;
+    a->capAlphabet = 0;
+    a->capTransitions = 0;
+    a->capFinaux = 0;
+
     strcpy(a->etatInitial, "");
 }
 
@@ -241,41 +250,27 @@ int indiceEtat(Automate *a, const char *etat) {
     return -1;
 }
 
-/* ========================================================= */
-/* ===================== COPIE AUTOMATE ==================== */
-/* ========================================================= */
-
 void copierAutomate(Automate *src, Automate *dest) {
     int i;
+
     initialiserAutomate(dest);
 
-    for (i = 0; i < src->nbEtats; i++) {
-        ajouterEtat(dest, src->etats[i]);
-    }
-
-    for (i = 0; i < src->nbAlphabet; i++) {
-        ajouterSymbole(dest, src->alphabet[i]);
-    }
-
+    for (i = 0; i < src->nbEtats; i++) ajouterEtat(dest, src->etats[i]);
+    for (i = 0; i < src->nbAlphabet; i++) ajouterSymbole(dest, src->alphabet[i]);
     for (i = 0; i < src->nbTransitions; i++) {
         ajouterTransition(dest,
                           src->transitions[i].depart,
                           src->transitions[i].symbole,
                           src->transitions[i].arrivee);
     }
-
     strcpy(dest->etatInitial, src->etatInitial);
-
-    for (i = 0; i < src->nbFinaux; i++) {
-        ajouterEtatFinal(dest, src->etatsFinaux[i]);
-    }
+    for (i = 0; i < src->nbFinaux; i++) ajouterEtatFinal(dest, src->etatsFinaux[i]);
 }
 
 /* ========================================================= */
 /* ====================== PARTIE 1 ========================= */
 /* ========================================================= */
 
-/* 1. Lecture d'un automate depuis un fichier .dot */
 void lireAutomate(Automate *a, const char *nomFichier) {
     FILE *f;
     char ligne[256];
@@ -290,25 +285,37 @@ void lireAutomate(Automate *a, const char *nomFichier) {
     initialiserAutomate(a);
 
     while (fgets(ligne, sizeof(ligne), f)) {
-        if (strstr(ligne, "init ->")) {
+        char *p;
+
+        if (strstr(ligne, "init ->") != NULL) {
             char init[20];
-            if (sscanf(ligne, " init -> %19[^;];", init) == 1 ||
-                sscanf(ligne, "init -> %19[^;];", init) == 1) {
+            if (sscanf(ligne, " %*s -> %19[^; \n\r]", init) == 1) {
                 strcpy(a->etatInitial, init);
                 ajouterEtat(a, init);
             }
         }
-        else if (strstr(ligne, "[shape=doublecircle]")) {
+        else if (strstr(ligne, "shape=doublecircle") != NULL) {
             char fin[20];
-            if (sscanf(ligne, " %19s [shape=doublecircle];", fin) == 1) {
+            if (sscanf(ligne, " %19s", fin) == 1) {
                 ajouterEtat(a, fin);
                 ajouterEtatFinal(a, fin);
             }
         }
-        else if (strstr(ligne, "[label=")) {
+        else if (strstr(ligne, "label=") != NULL) {
             char dep[20], arr[20], symb[20];
-            if (sscanf(ligne, " %19s -> %19s [label=\"%19[^\"]\"]", dep, arr, symb) == 3) {
-                ajouterTransition(a, dep, symb, arr);
+
+            if (sscanf(ligne, " %19s -> %19s", dep, arr) == 2) {
+                p = strchr(arr, '[');
+                if (p) *p = '\0';
+                p = strchr(arr, ';');
+                if (p) *p = '\0';
+
+                p = strstr(ligne, "label=\"");
+                if (p != NULL) {
+                    p += 7;
+                    sscanf(p, "%19[^\"]", symb);
+                    ajouterTransition(a, dep, symb, arr);
+                }
             }
         }
     }
@@ -317,30 +324,23 @@ void lireAutomate(Automate *a, const char *nomFichier) {
     printf("Automate charge avec succes.\n");
 }
 
-/* 2. Affichage d'un automate */
 void afficherAutomate(Automate *a) {
     int i;
 
     printf("\n===== INFORMATIONS DE L'AUTOMATE =====\n");
 
     printf("Etats : ");
-    for (i = 0; i < a->nbEtats; i++) {
-        printf("%s ", a->etats[i]);
-    }
+    for (i = 0; i < a->nbEtats; i++) printf("%s ", a->etats[i]);
     printf("\n");
 
     printf("Alphabet : ");
-    for (i = 0; i < a->nbAlphabet; i++) {
-        printf("%s ", a->alphabet[i]);
-    }
+    for (i = 0; i < a->nbAlphabet; i++) printf("%s ", a->alphabet[i]);
     printf("\n");
 
     printf("Etat initial : %s\n", a->etatInitial);
 
     printf("Etats finaux : ");
-    for (i = 0; i < a->nbFinaux; i++) {
-        printf("%s ", a->etatsFinaux[i]);
-    }
+    for (i = 0; i < a->nbFinaux; i++) printf("%s ", a->etatsFinaux[i]);
     printf("\n");
 
     printf("Transitions :\n");
@@ -354,13 +354,10 @@ void afficherAutomate(Automate *a) {
     printf("======================================\n");
 }
 
-/* 3. Menu : fait en bas dans main */
-
 /* ========================================================= */
 /* ====================== PARTIE 2 ========================= */
 /* ========================================================= */
 
-/* 5. Générer un fichier .dot */
 void genererDot(Automate *a, const char *nomFichier) {
     FILE *f;
     int i;
@@ -393,7 +390,6 @@ void genererDot(Automate *a, const char *nomFichier) {
     printf("Fichier .dot genere avec succes.\n");
 }
 
-/* 6. Etat avec plus de transitions sortantes */
 void etatPlusSortantes(Automate *a) {
     int i, j, nb, max = -1;
     char meilleur[20] = "";
@@ -401,9 +397,7 @@ void etatPlusSortantes(Automate *a) {
     for (i = 0; i < a->nbEtats; i++) {
         nb = 0;
         for (j = 0; j < a->nbTransitions; j++) {
-            if (strcmp(a->etats[i], a->transitions[j].depart) == 0) {
-                nb++;
-            }
+            if (strcmp(a->etats[i], a->transitions[j].depart) == 0) nb++;
         }
         if (nb > max) {
             max = nb;
@@ -417,7 +411,6 @@ void etatPlusSortantes(Automate *a) {
         printf("Aucun etat.\n");
 }
 
-/* 6. Etat avec plus de transitions entrantes */
 void etatPlusEntrantes(Automate *a) {
     int i, j, nb, max = -1;
     char meilleur[20] = "";
@@ -425,9 +418,7 @@ void etatPlusEntrantes(Automate *a) {
     for (i = 0; i < a->nbEtats; i++) {
         nb = 0;
         for (j = 0; j < a->nbTransitions; j++) {
-            if (strcmp(a->etats[i], a->transitions[j].arrivee) == 0) {
-                nb++;
-            }
+            if (strcmp(a->etats[i], a->transitions[j].arrivee) == 0) nb++;
         }
         if (nb > max) {
             max = nb;
@@ -441,7 +432,6 @@ void etatPlusEntrantes(Automate *a) {
         printf("Aucun etat.\n");
 }
 
-/* 7. Etats ayant au moins une transition sortante avec une lettre donnée */
 void afficherEtatsAvecLettre(Automate *a, const char *lettre) {
     int i, j, trouveGlobal = 0;
 
@@ -457,24 +447,16 @@ void afficherEtatsAvecLettre(Automate *a, const char *lettre) {
                 break;
             }
         }
-        if (trouve) {
-            printf("%s ", a->etats[i]);
-        }
+        if (trouve) printf("%s ", a->etats[i]);
     }
 
-    if (!trouveGlobal) {
-        printf("aucun");
-    }
-
+    if (!trouveGlobal) printf("aucun");
     printf("\n");
 }
 
-/* 8. Tester si un mot est reconnu
-   Remarque : cette fonction suppose un automate deterministe.
-*/
 int motReconnu(Automate *a, const char *mot) {
     char courant[20];
-    char symbole[20];
+    char symbole[2];
     int i, j, trouve;
 
     strcpy(courant, a->etatInitial);
@@ -499,7 +481,6 @@ int motReconnu(Automate *a, const char *mot) {
     return estFinal(a, courant);
 }
 
-/* 9. Lire un fichier de mots et enregistrer les mots acceptés */
 void lireFichierMots(Automate *a, const char *fichierIn, const char *fichierOut) {
     FILE *fin, *fout;
     char mot[200];
@@ -515,9 +496,7 @@ void lireFichierMots(Automate *a, const char *fichierIn, const char *fichierOut)
     }
 
     while (fscanf(fin, "%199s", mot) == 1) {
-        if (motReconnu(a, mot)) {
-            fprintf(fout, "%s\n", mot);
-        }
+        if (motReconnu(a, mot)) fprintf(fout, "%s\n", mot);
     }
 
     fclose(fin);
@@ -556,7 +535,6 @@ void copierAvecPrefixe(Automate *src, Automate *dest, const char *prefixe) {
     }
 }
 
-/* 10. Concaténation */
 Automate concatenationAutomates(Automate *a1, Automate *a2) {
     Automate res;
     int i;
@@ -583,7 +561,6 @@ Automate concatenationAutomates(Automate *a1, Automate *a2) {
     return res;
 }
 
-/* 11. Union */
 Automate unionAutomates(Automate *a1, Automate *a2) {
     Automate res;
     int i;
@@ -622,7 +599,7 @@ Automate unionAutomates(Automate *a1, Automate *a2) {
     return res;
 }
 
-/* ---------- REGEX -> AUTOMATE (Thompson) ---------- */
+/* ---------- REGEX -> AUTOMATE ---------- */
 
 Automate automateSymbole(const char *symbole) {
     Automate a;
@@ -657,6 +634,7 @@ Automate etoileAutomate(Automate *a) {
 
     ajouterEtat(&res, init);
     ajouterEtat(&res, fin);
+
     strcpy(res.etatInitial, init);
     ajouterEtatFinal(&res, fin);
 
@@ -740,14 +718,10 @@ void infixeVersPostfixe(const char *infixe, char *postfixe) {
         }
     }
 
-    while (top >= 0) {
-        postfixe[j++] = pile[top--];
-    }
-
+    while (top >= 0) postfixe[j++] = pile[top--];
     postfixe[j] = '\0';
 }
 
-/* 12. Construire un automate à partir d'une expression régulière */
 Automate expressionVersAutomate(const char *expression) {
     char exprAvecConcat[500];
     char postfixe[500];
@@ -788,7 +762,7 @@ Automate expressionVersAutomate(const char *expression) {
     return pile[top];
 }
 
-/* ---------- Suppression des epsilon-transitions ---------- */
+/* ---------- SUPPRESSION EPSILON ---------- */
 
 void fermetureEpsilon(Automate *a, int idxEtat, int *fermeture) {
     int *pile;
@@ -825,7 +799,6 @@ void fermetureEpsilon(Automate *a, int idxEtat, int *fermeture) {
     free(pile);
 }
 
-/* 13. Suppression des epsilon-transitions */
 Automate supprimerEpsilonTransitions(Automate *a) {
     Automate res;
     int i, j, k, t, m;
@@ -833,19 +806,13 @@ Automate supprimerEpsilonTransitions(Automate *a) {
 
     initialiserAutomate(&res);
 
-    for (i = 0; i < a->nbEtats; i++) {
-        ajouterEtat(&res, a->etats[i]);
-    }
-
-    for (i = 0; i < a->nbAlphabet; i++) {
-        ajouterSymbole(&res, a->alphabet[i]);
-    }
+    for (i = 0; i < a->nbEtats; i++) ajouterEtat(&res, a->etats[i]);
+    for (i = 0; i < a->nbAlphabet; i++) ajouterSymbole(&res, a->alphabet[i]);
 
     strcpy(res.etatInitial, a->etatInitial);
 
     fermP = (int *)malloc(a->nbEtats * sizeof(int));
     fermQ = (int *)malloc(a->nbEtats * sizeof(int));
-
     if (fermP == NULL || fermQ == NULL) {
         printf("Erreur memoire.\n");
         exit(1);
@@ -853,7 +820,6 @@ Automate supprimerEpsilonTransitions(Automate *a) {
 
     for (i = 0; i < a->nbEtats; i++) {
         fermetureEpsilon(a, i, fermP);
-
         for (j = 0; j < a->nbEtats; j++) {
             if (fermP[j] && estFinal(a, a->etats[j])) {
                 ajouterEtatFinal(&res, a->etats[i]);
@@ -898,9 +864,7 @@ Automate supprimerEpsilonTransitions(Automate *a) {
     return res;
 }
 
-/* ========================================================= */
-/* ========== QUESTION SUPPLEMENTAIRE : AUTOMATE -> REGEX == */
-/* ========================================================= */
+/* ---------- AUTOMATE -> REGEX ---------- */
 
 char *copieStr(const char *s) {
     return dupliquerChaine(s);
@@ -947,15 +911,12 @@ void libererMatriceRegex(char ***R, int n) {
     int i, j;
     if (R == NULL) return;
     for (i = 0; i < n; i++) {
-        for (j = 0; j < n; j++) {
-            free(R[i][j]);
-        }
+        for (j = 0; j < n; j++) free(R[i][j]);
         free(R[i]);
     }
     free(R);
 }
 
-/* automate -> expression reguliere par elimination d'etats */
 char *automateVersExpressionReguliere(Automate *a) {
     int i, j, k;
     int n = a->nbEtats + 2;
@@ -973,9 +934,7 @@ char *automateVersExpressionReguliere(Automate *a) {
     }
 
     noms[0] = copieStr("INIT_GLOBAL");
-    for (i = 0; i < a->nbEtats; i++) {
-        noms[i + 1] = copieStr(a->etats[i]);
-    }
+    for (i = 0; i < a->nbEtats; i++) noms[i + 1] = copieStr(a->etats[i]);
     noms[n - 1] = copieStr("FINAL_GLOBAL");
 
     for (i = 0; i < n; i++) {
@@ -984,17 +943,13 @@ char *automateVersExpressionReguliere(Automate *a) {
             printf("Erreur memoire.\n");
             exit(1);
         }
-        for (j = 0; j < n; j++) {
-            R[i][j] = NULL;
-        }
+        for (j = 0; j < n; j++) R[i][j] = NULL;
     }
 
-    /* init global -> etat initial */
     i = start;
     j = indiceEtat(a, a->etatInitial) + 1;
     R[i][j] = regexUnion(R[i][j], "e");
 
-    /* etats finaux -> final global */
     for (i = 0; i < a->nbFinaux; i++) {
         int idx = indiceEtat(a, a->etatsFinaux[i]);
         if (idx != -1) {
@@ -1002,28 +957,25 @@ char *automateVersExpressionReguliere(Automate *a) {
         }
     }
 
-    /* transitions */
     for (i = 0; i < a->nbTransitions; i++) {
         int d = indiceEtat(a, a->transitions[i].depart) + 1;
         int ar = indiceEtat(a, a->transitions[i].arrivee) + 1;
         R[d][ar] = regexUnion(R[d][ar], a->transitions[i].symbole);
     }
 
-    /* elimination de tous les etats internes de l'automate */
     for (k = 1; k <= a->nbEtats; k++) {
         char *RkkStar = regexStar(R[k][k]);
 
         for (i = 0; i < n; i++) {
             if (i == k) continue;
             for (j = 0; j < n; j++) {
-                char *part1, *part2, *nouveau, *tempUnion;
+                char *part1, *part2, *tempUnion;
 
                 if (j == k) continue;
                 if (estVideRegex(R[i][k]) || estVideRegex(R[k][j])) continue;
 
                 part1 = regexConcat(R[i][k], RkkStar);
                 part2 = regexConcat(part1, R[k][j]);
-
                 free(part1);
 
                 tempUnion = regexUnion(R[i][j], part2);
@@ -1050,11 +1002,8 @@ char *automateVersExpressionReguliere(Automate *a) {
 
     {
         char *resultat;
-        if (R[start][end] == NULL) {
-            resultat = copieStr("∅");
-        } else {
-            resultat = copieStr(R[start][end]);
-        }
+        if (R[start][end] == NULL) resultat = copieStr("∅");
+        else resultat = copieStr(R[start][end]);
 
         libererMatriceRegex(R, n);
         for (i = 0; i < n; i++) free(noms[i]);
@@ -1062,6 +1011,510 @@ char *automateVersExpressionReguliere(Automate *a) {
 
         return resultat;
     }
+}
+
+/* ========================================================= */
+/* ====================== PARTIE 4 ========================= */
+/* ========================================================= */
+
+/* ---------- OUTILS POUR DETERMINISATION ---------- */
+
+int contientEtatDansListe(char **liste, int nb, const char *etat) {
+    int i;
+    for (i = 0; i < nb; i++) {
+        if (strcmp(liste[i], etat) == 0) return 1;
+    }
+    return 0;
+}
+
+void ajouterEtatDansListe(char ***liste, int *nb, const char *etat) {
+    char **nv = (char **)realloc(*liste, (*nb + 1) * sizeof(char *));
+    if (nv == NULL) {
+        printf("Erreur memoire.\n");
+        exit(1);
+    }
+    *liste = nv;
+    (*liste)[*nb] = dupliquerChaine(etat);
+    (*nb)++;
+}
+
+void libererListeEtatsTemp(char **liste, int nb) {
+    int i;
+    if (liste == NULL) return;
+    for (i = 0; i < nb; i++) free(liste[i]);
+    free(liste);
+}
+
+void trierListeEtats(char **liste, int nb) {
+    int i, j;
+    for (i = 0; i < nb - 1; i++) {
+        for (j = i + 1; j < nb; j++) {
+            if (strcmp(liste[i], liste[j]) > 0) {
+                char *tmp = liste[i];
+                liste[i] = liste[j];
+                liste[j] = tmp;
+            }
+        }
+    }
+}
+
+void nomEtatCompose(char *dest, char **liste, int nb) {
+    int i;
+    dest[0] = '\0';
+
+    if (nb == 0) {
+        strcpy(dest, "VIDE");
+        return;
+    }
+
+    trierListeEtats(liste, nb);
+
+    for (i = 0; i < nb; i++) {
+        strcat(dest, liste[i]);
+        if (i < nb - 1) strcat(dest, "|");
+    }
+}
+
+int estFinalDansListe(Automate *a, char **liste, int nb) {
+    int i;
+    for (i = 0; i < nb; i++) {
+        if (estFinal(a, liste[i])) return 1;
+    }
+    return 0;
+}
+
+void fermetureEpsilonDepuisListe(Automate *a, char **entree, int nbEntree, char ***sortie, int *nbSortie) {
+    int changement = 1;
+    int i, j;
+
+    *sortie = NULL;
+    *nbSortie = 0;
+
+    for (i = 0; i < nbEntree; i++) {
+        if (!contientEtatDansListe(*sortie, *nbSortie, entree[i])) {
+            ajouterEtatDansListe(sortie, nbSortie, entree[i]);
+        }
+    }
+
+    while (changement) {
+        changement = 0;
+
+        for (i = 0; i < *nbSortie; i++) {
+            for (j = 0; j < a->nbTransitions; j++) {
+                if (strcmp(a->transitions[j].depart, (*sortie)[i]) == 0 &&
+                    (strcmp(a->transitions[j].symbole, "e") == 0 ||
+                     strcmp(a->transitions[j].symbole, "ε") == 0)) {
+
+                    if (!contientEtatDansListe(*sortie, *nbSortie, a->transitions[j].arrivee)) {
+                        ajouterEtatDansListe(sortie, nbSortie, a->transitions[j].arrivee);
+                        changement = 1;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void deplacerParSymbole(Automate *a, char **entree, int nbEntree, const char *symbole, char ***sortie, int *nbSortie) {
+    int i, j;
+
+    *sortie = NULL;
+    *nbSortie = 0;
+
+    for (i = 0; i < nbEntree; i++) {
+        for (j = 0; j < a->nbTransitions; j++) {
+            if (strcmp(a->transitions[j].depart, entree[i]) == 0 &&
+                strcmp(a->transitions[j].symbole, symbole) == 0) {
+
+                if (!contientEtatDansListe(*sortie, *nbSortie, a->transitions[j].arrivee)) {
+                    ajouterEtatDansListe(sortie, nbSortie, a->transitions[j].arrivee);
+                }
+            }
+        }
+    }
+}
+
+void decomposerNomEtatCompose(const char *nom, char ***liste, int *nb) {
+    char copie[500];
+    char *token;
+
+    *liste = NULL;
+    *nb = 0;
+
+    if (strcmp(nom, "VIDE") == 0) return;
+
+    strcpy(copie, nom);
+    token = strtok(copie, "|");
+    while (token != NULL) {
+        ajouterEtatDansListe(liste, nb, token);
+        token = strtok(NULL, "|");
+    }
+}
+
+/* 14. Produit = intersection */
+Automate produitAutomates(Automate *a1, Automate *a2) {
+    Automate res;
+    int i, j;
+    char etat[100], dep[100], arr[100];
+
+    initialiserAutomate(&res);
+
+    for (i = 0; i < a1->nbEtats; i++) {
+        for (j = 0; j < a2->nbEtats; j++) {
+            sprintf(etat, "(%s,%s)", a1->etats[i], a2->etats[j]);
+            ajouterEtat(&res, etat);
+        }
+    }
+
+    sprintf(res.etatInitial, "(%s,%s)", a1->etatInitial, a2->etatInitial);
+
+    for (i = 0; i < a1->nbFinaux; i++) {
+        for (j = 0; j < a2->nbFinaux; j++) {
+            sprintf(etat, "(%s,%s)", a1->etatsFinaux[i], a2->etatsFinaux[j]);
+            ajouterEtatFinal(&res, etat);
+        }
+    }
+
+    for (i = 0; i < a1->nbTransitions; i++) {
+        for (j = 0; j < a2->nbTransitions; j++) {
+            if (strcmp(a1->transitions[i].symbole, a2->transitions[j].symbole) == 0 &&
+                strcmp(a1->transitions[i].symbole, "e") != 0 &&
+                strcmp(a1->transitions[i].symbole, "ε") != 0) {
+
+                sprintf(dep, "(%s,%s)", a1->transitions[i].depart, a2->transitions[j].depart);
+                sprintf(arr, "(%s,%s)", a1->transitions[i].arrivee, a2->transitions[j].arrivee);
+
+                ajouterTransition(&res, dep, a1->transitions[i].symbole, arr);
+            }
+        }
+    }
+
+    return res;
+}
+
+/* 15. Déterminisation */
+Automate determiniserAutomate(Automate *a) {
+    Automate res;
+    char **etatInitListe = NULL, **fermInit = NULL;
+    int nbEtatInitListe = 0, nbFermInit = 0;
+    char nomInit[500];
+
+    char **aTraiter = NULL;
+    int nbATraiter = 0;
+    int indiceTraitement = 0;
+
+    initialiserAutomate(&res);
+
+    ajouterEtatDansListe(&etatInitListe, &nbEtatInitListe, a->etatInitial);
+    fermetureEpsilonDepuisListe(a, etatInitListe, nbEtatInitListe, &fermInit, &nbFermInit);
+    nomEtatCompose(nomInit, fermInit, nbFermInit);
+
+    ajouterEtat(&res, nomInit);
+    strcpy(res.etatInitial, nomInit);
+    if (estFinalDansListe(a, fermInit, nbFermInit)) ajouterEtatFinal(&res, nomInit);
+
+    ajouterEtatDansListe(&aTraiter, &nbATraiter, nomInit);
+
+    while (indiceTraitement < nbATraiter) {
+        char *etatCourantNom = aTraiter[indiceTraitement];
+        char **listeCourante = NULL;
+        int nbListeCourante = 0;
+        int i;
+
+        decomposerNomEtatCompose(etatCourantNom, &listeCourante, &nbListeCourante);
+
+        for (i = 0; i < a->nbAlphabet; i++) {
+            char **move = NULL, **ferm = NULL;
+            int nbMove = 0, nbFerm = 0;
+            char nomDest[500];
+
+            deplacerParSymbole(a, listeCourante, nbListeCourante, a->alphabet[i], &move, &nbMove);
+
+            if (nbMove == 0) {
+                libererListeEtatsTemp(move, nbMove);
+                continue;
+            }
+
+            fermetureEpsilonDepuisListe(a, move, nbMove, &ferm, &nbFerm);
+            nomEtatCompose(nomDest, ferm, nbFerm);
+
+            if (!existeEtat(&res, nomDest)) {
+                ajouterEtat(&res, nomDest);
+                if (estFinalDansListe(a, ferm, nbFerm)) ajouterEtatFinal(&res, nomDest);
+                ajouterEtatDansListe(&aTraiter, &nbATraiter, nomDest);
+            }
+
+            ajouterTransition(&res, etatCourantNom, a->alphabet[i], nomDest);
+
+            libererListeEtatsTemp(move, nbMove);
+            libererListeEtatsTemp(ferm, nbFerm);
+        }
+
+        libererListeEtatsTemp(listeCourante, nbListeCourante);
+        indiceTraitement++;
+    }
+
+    libererListeEtatsTemp(etatInitListe, nbEtatInitListe);
+    libererListeEtatsTemp(fermInit, nbFermInit);
+    libererListeEtatsTemp(aTraiter, nbATraiter);
+
+    return res;
+}
+
+int destinationUnique(Automate *a, const char *etat, const char *symbole, char *dest) {
+    int i;
+    for (i = 0; i < a->nbTransitions; i++) {
+        if (strcmp(a->transitions[i].depart, etat) == 0 &&
+            strcmp(a->transitions[i].symbole, symbole) == 0) {
+            strcpy(dest, a->transitions[i].arrivee);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+Automate automateAccessible(Automate *a) {
+    Automate res;
+    int *visite;
+    int changement = 1;
+    int i, j;
+
+    initialiserAutomate(&res);
+
+    visite = (int *)calloc(a->nbEtats, sizeof(int));
+    if (visite == NULL) {
+        printf("Erreur memoire.\n");
+        exit(1);
+    }
+
+    {
+        int idxInit = indiceEtat(a, a->etatInitial);
+        if (idxInit != -1) visite[idxInit] = 1;
+    }
+
+    while (changement) {
+        changement = 0;
+        for (i = 0; i < a->nbTransitions; i++) {
+            int d = indiceEtat(a, a->transitions[i].depart);
+            int ar = indiceEtat(a, a->transitions[i].arrivee);
+            if (d != -1 && ar != -1 && visite[d] && !visite[ar]) {
+                visite[ar] = 1;
+                changement = 1;
+            }
+        }
+    }
+
+    for (i = 0; i < a->nbEtats; i++) {
+        if (visite[i]) ajouterEtat(&res, a->etats[i]);
+    }
+
+    for (i = 0; i < a->nbAlphabet; i++) ajouterSymbole(&res, a->alphabet[i]);
+
+    strcpy(res.etatInitial, a->etatInitial);
+
+    for (i = 0; i < a->nbFinaux; i++) {
+        int idx = indiceEtat(a, a->etatsFinaux[i]);
+        if (idx != -1 && visite[idx]) ajouterEtatFinal(&res, a->etatsFinaux[i]);
+    }
+
+    for (i = 0; i < a->nbTransitions; i++) {
+        int d = indiceEtat(a, a->transitions[i].depart);
+        int ar = indiceEtat(a, a->transitions[i].arrivee);
+        if (d != -1 && ar != -1 && visite[d] && visite[ar]) {
+            ajouterTransition(&res,
+                              a->transitions[i].depart,
+                              a->transitions[i].symbole,
+                              a->transitions[i].arrivee);
+        }
+    }
+
+    free(visite);
+    return res;
+}
+
+/* ---------- 16. Moore ---------- */
+
+int signaturesEgales(int *a, int *b, int taille) {
+    int i;
+    for (i = 0; i < taille; i++) {
+        if (a[i] != b[i]) return 0;
+    }
+    return 1;
+}
+
+Automate minimiserAutomateMoore(Automate *a) {
+    Automate dfa, accessible, res;
+    int *partition, *nouvellePartition;
+    int **signatures;
+    int i, j, k, nbClasses, change;
+
+    dfa = determiniserAutomate(a);
+    accessible = automateAccessible(&dfa);
+
+    initialiserAutomate(&res);
+
+    partition = (int *)malloc(accessible.nbEtats * sizeof(int));
+    nouvellePartition = (int *)malloc(accessible.nbEtats * sizeof(int));
+    signatures = (int **)malloc(accessible.nbEtats * sizeof(int *));
+    if (partition == NULL || nouvellePartition == NULL || signatures == NULL) {
+        printf("Erreur memoire.\n");
+        exit(1);
+    }
+
+    for (i = 0; i < accessible.nbEtats; i++) {
+        signatures[i] = (int *)malloc((accessible.nbAlphabet + 1) * sizeof(int));
+        if (signatures[i] == NULL) {
+            printf("Erreur memoire.\n");
+            exit(1);
+        }
+    }
+
+    /* partition initiale : finaux / non finaux */
+    for (i = 0; i < accessible.nbEtats; i++) {
+        partition[i] = estFinal(&accessible, accessible.etats[i]) ? 1 : 0;
+    }
+
+    change = 1;
+    while (change) {
+        change = 0;
+
+        /* construire la signature de chaque état */
+        for (i = 0; i < accessible.nbEtats; i++) {
+            signatures[i][0] = estFinal(&accessible, accessible.etats[i]) ? 1 : 0;
+
+            for (k = 0; k < accessible.nbAlphabet; k++) {
+                char dest[100];
+                if (destinationUnique(&accessible, accessible.etats[i], accessible.alphabet[k], dest)) {
+                    int idxDest = indiceEtat(&accessible, dest);
+                    signatures[i][k + 1] = partition[idxDest];
+                } else {
+                    signatures[i][k + 1] = -1;
+                }
+            }
+        }
+
+        nbClasses = 0;
+        for (i = 0; i < accessible.nbEtats; i++) {
+            int trouve = 0;
+
+            for (j = 0; j < i; j++) {
+                if (signaturesEgales(signatures[i], signatures[j], accessible.nbAlphabet + 1)) {
+                    nouvellePartition[i] = nouvellePartition[j];
+                    trouve = 1;
+                    break;
+                }
+            }
+
+            if (!trouve) {
+                nouvellePartition[i] = nbClasses;
+                nbClasses++;
+            }
+        }
+
+        for (i = 0; i < accessible.nbEtats; i++) {
+            if (partition[i] != nouvellePartition[i]) {
+                change = 1;
+                break;
+            }
+        }
+
+        for (i = 0; i < accessible.nbEtats; i++) {
+            partition[i] = nouvellePartition[i];
+        }
+    }
+
+    for (i = 0; i < nbClasses; i++) {
+        char nom[20];
+        sprintf(nom, "M%d", i);
+        ajouterEtat(&res, nom);
+    }
+
+    for (i = 0; i < accessible.nbEtats; i++) {
+        char nomClasse[20];
+        sprintf(nomClasse, "M%d", partition[i]);
+
+        if (strcmp(accessible.etats[i], accessible.etatInitial) == 0) {
+            strcpy(res.etatInitial, nomClasse);
+        }
+
+        if (estFinal(&accessible, accessible.etats[i])) {
+            ajouterEtatFinal(&res, nomClasse);
+        }
+    }
+
+    for (i = 0; i < accessible.nbEtats; i++) {
+        char dep[20];
+        sprintf(dep, "M%d", partition[i]);
+
+        for (k = 0; k < accessible.nbAlphabet; k++) {
+            char dest[100];
+            if (destinationUnique(&accessible, accessible.etats[i], accessible.alphabet[k], dest)) {
+                int idxDest = indiceEtat(&accessible, dest);
+                char arr[20];
+                sprintf(arr, "M%d", partition[idxDest]);
+                ajouterTransition(&res, dep, accessible.alphabet[k], arr);
+            }
+        }
+    }
+
+    for (i = 0; i < accessible.nbAlphabet; i++) ajouterSymbole(&res, accessible.alphabet[i]);
+
+    for (i = 0; i < accessible.nbEtats; i++) free(signatures[i]);
+    free(signatures);
+    free(partition);
+    free(nouvellePartition);
+
+    libererAutomate(&dfa);
+    libererAutomate(&accessible);
+
+    return res;
+}
+
+/* 17. Génération des fichiers .dot */
+void genererFichiersOptimisation(Automate *a) {
+    Automate det, min;
+
+    det = determiniserAutomate(a);
+    min = minimiserAutomateMoore(a);
+
+    genererDot(a, "automate_initial.dot");
+    genererDot(&det, "automate_deterministe.dot");
+    genererDot(&min, "automate_minimal.dot");
+
+    printf("Fichiers generes : automate_initial.dot, automate_deterministe.dot, automate_minimal.dot\n");
+
+    libererAutomate(&det);
+    libererAutomate(&min);
+}
+
+/* 18. Afficher les mots reconnus par l'automate minimal */
+void afficherMotsAutomateMinimal(Automate *a, const char *nomFichier) {
+    Automate min;
+    FILE *f;
+    char mot[200];
+    int trouve = 0;
+
+    min = minimiserAutomateMoore(a);
+
+    f = fopen(nomFichier, "r");
+    if (f == NULL) {
+        printf("Erreur : impossible d'ouvrir %s\n", nomFichier);
+        libererAutomate(&min);
+        return;
+    }
+
+    printf("Mots reconnus par l'automate minimal :\n");
+    while (fscanf(f, "%199s", mot) == 1) {
+        if (motReconnu(&min, mot)) {
+            printf("%s\n", mot);
+            trouve = 1;
+        }
+    }
+
+    if (!trouve) printf("Aucun mot reconnu.\n");
+
+    fclose(f);
+    libererAutomate(&min);
 }
 
 /* ========================================================= */
@@ -1086,10 +1539,15 @@ void afficherMenu() {
     printf("9. Concatenation de deux automates\n");
     printf("10. Union de deux automates\n");
     printf("11. Construire un automate depuis une expression reguliere\n");
-    printf("12. Supprimer les epsilon-transitions de l'automate courant\n");
-
-    printf("\nQUESTION SUPPLEMENTAIRE\n");
+    printf("12. Supprimer les epsilon-transitions de l'automate\n");
     printf("13. Transformer l'automate courant en expression reguliere\n");
+
+    printf("\nPARTIE 4 : OPTIMISATION D'AUTOMATE\n");
+    printf("14. Produit de deux automates (intersection)\n");
+    printf("15. Determiniser un automate\n");
+    printf("16. Minimiser un automate (Moore)\n");
+    printf("17. Generer les fichiers .dot : initial / deterministe / minimal\n");
+    printf("18. Afficher les mots d'un fichier txt reconnus par l'automate minimal\n");
 
     printf("\n0. Quitter\n");
     printf("==================================================\n");
@@ -1101,9 +1559,8 @@ void afficherMenu() {
 /* ========================================================= */
 
 int main() {
-    Automate a, b, res;
+    Automate a, b, res, det, min, prod;
     int choix;
-   
 
     char fichier[200];
     char fichier2[200];
@@ -1115,6 +1572,9 @@ int main() {
     initialiserAutomate(&a);
     initialiserAutomate(&b);
     initialiserAutomate(&res);
+    initialiserAutomate(&det);
+    initialiserAutomate(&min);
+    initialiserAutomate(&prod);
 
     do {
         afficherMenu();
@@ -1167,77 +1627,155 @@ int main() {
                 scanf("%199s", fichier2);
                 lireFichierMots(&a, fichier, fichier2);
                 break;
- case 9:
-    printf("Fichier .dot du premier automate : ");
-    scanf("%199s", fichier);
-    printf("Fichier .dot du deuxieme automate : ");
-    scanf("%199s", fichier2);
 
-    lireAutomate(&a, fichier);
-    lireAutomate(&b, fichier2);
+            case 9:
+                printf("Fichier .dot du premier automate : ");
+                scanf("%199s", fichier);
+                printf("Fichier .dot du deuxieme automate : ");
+                scanf("%199s", fichier2);
 
-    libererAutomate(&res);
-    res = concatenationAutomates(&a, &b);
+                lireAutomate(&a, fichier);
+                lireAutomate(&b, fichier2);
 
-    printf("Automate resultat de la concatenation :\n");
-    afficherAutomate(&res);
+                libererAutomate(&res);
+                initialiserAutomate(&res);
+                res = concatenationAutomates(&a, &b);
 
-    genererDot(&res, "automate_concatenation.dot");
-    printf("Fichier genere : automate_concatenation.dot\n");
-    break;
-case 10:
-    printf("Fichier .dot du premier automate : ");
-    scanf("%199s", fichier);
-    printf("Fichier .dot du deuxieme automate : ");
-    scanf("%199s", fichier2);
+                printf("Automate resultat de la concatenation :\n");
+                afficherAutomate(&res);
 
-    lireAutomate(&a, fichier);
-    lireAutomate(&b, fichier2);
+                genererDot(&res, "automate_concatenation.dot");
+                printf("Fichier genere : automate_concatenation.dot\n");
+                break;
 
-    libererAutomate(&res);
-    res = unionAutomates(&a, &b);
+            case 10:
+                printf("Fichier .dot du premier automate : ");
+                scanf("%199s", fichier);
+                printf("Fichier .dot du deuxieme automate : ");
+                scanf("%199s", fichier2);
 
-    printf("Automate resultat de l'union :\n");
-    afficherAutomate(&res);
+                lireAutomate(&a, fichier);
+                lireAutomate(&b, fichier2);
 
-    genererDot(&res, "automate_union.dot");
-    printf("Fichier genere : automate_union.dot\n");
-    break;
+                libererAutomate(&res);
+                initialiserAutomate(&res);
+                res = unionAutomates(&a, &b);
 
-           case 11:
-    printf("Donner l'expression reguliere : ");
-    scanf("%499s", expr);
+                printf("Automate resultat de l'union :\n");
+                afficherAutomate(&res);
 
-    libererAutomate(&res);
-    res = expressionVersAutomate(expr);
+                genererDot(&res, "automate_union.dot");
+                printf("Fichier genere : automate_union.dot\n");
+                break;
 
-    printf("Automate genere a partir de l'expression reguliere :\n");
-    afficherAutomate(&res);
+            case 11:
+                printf("Donner l'expression reguliere : ");
+                scanf("%499s", expr);
 
-    genererDot(&res, "automate_expression.dot");
-    printf("Fichier genere : automate_expression.dot\n");
-    break;
+                libererAutomate(&res);
+                initialiserAutomate(&res);
+                res = expressionVersAutomate(expr);
 
-           case 12:
-    printf("Entrer le nom du fichier .dot a supprimer les epsilon-transitions : ");
-    scanf("%199s", fichier);
+                printf("Automate genere a partir de l'expression reguliere :\n");
+                afficherAutomate(&res);
 
-    lireAutomate(&a, fichier);
+                genererDot(&res, "automate_expression.dot");
+                printf("Fichier genere : automate_expression.dot\n");
+                break;
 
-    libererAutomate(&res);
-    res = supprimerEpsilonTransitions(&a);
+            case 12:
+                printf("Entrer le nom du fichier .dot a supprimer les epsilon-transitions : ");
+                scanf("%199s", fichier);
 
-    printf("Automate sans epsilon-transitions :\n");
-    afficherAutomate(&res);
+                lireAutomate(&a, fichier);
 
-    genererDot(&res, "automate_sans_epsilon.dot");
-    printf("Fichier genere : automate_sans_epsilon.dot\n");
-    break;
+                libererAutomate(&res);
+                initialiserAutomate(&res);
+                res = supprimerEpsilonTransitions(&a);
+
+                printf("Automate sans epsilon-transitions :\n");
+                afficherAutomate(&res);
+
+                genererDot(&res, "automate_sans_epsilon.dot");
+                printf("Fichier genere : automate_sans_epsilon.dot\n");
+                break;
 
             case 13:
                 regexResultat = automateVersExpressionReguliere(&a);
                 printf("Expression reguliere equivalente : %s\n", regexResultat);
                 free(regexResultat);
+                break;
+
+            case 14:
+                printf("Fichier .dot du premier automate : ");
+                scanf("%199s", fichier);
+                printf("Fichier .dot du deuxieme automate : ");
+                scanf("%199s", fichier2);
+
+                lireAutomate(&a, fichier);
+                lireAutomate(&b, fichier2);
+
+                libererAutomate(&prod);
+                initialiserAutomate(&prod);
+                prod = produitAutomates(&a, &b);
+
+                printf("Automate produit (intersection) :\n");
+                afficherAutomate(&prod);
+
+                genererDot(&prod, "automate_produit.dot");
+                printf("Fichier genere : automate_produit.dot\n");
+                break;
+
+            case 15:
+                printf("Entrer le nom du fichier .dot a determiniser : ");
+                scanf("%199s", fichier);
+
+                lireAutomate(&a, fichier);
+
+                libererAutomate(&det);
+                initialiserAutomate(&det);
+                det = determiniserAutomate(&a);
+
+                printf("Automate deterministe :\n");
+                afficherAutomate(&det);
+
+                genererDot(&det, "automate_deterministe.dot");
+                printf("Fichier genere : automate_deterministe.dot\n");
+                break;
+
+            case 16:
+                printf("Entrer le nom du fichier .dot a minimiser : ");
+                scanf("%199s", fichier);
+
+                lireAutomate(&a, fichier);
+
+                libererAutomate(&min);
+                initialiserAutomate(&min);
+                min = minimiserAutomateMoore(&a);
+
+                printf("Automate minimal (Moore) :\n");
+                afficherAutomate(&min);
+
+                genererDot(&min, "automate_minimal.dot");
+                printf("Fichier genere : automate_minimal.dot\n");
+                break;
+
+            case 17:
+                printf("Entrer le nom du fichier .dot de l'automate initial : ");
+                scanf("%199s", fichier);
+
+                lireAutomate(&a, fichier);
+                genererFichiersOptimisation(&a);
+                break;
+
+            case 18:
+                printf("Entrer le nom du fichier .dot de l'automate : ");
+                scanf("%199s", fichier);
+                printf("Entrer le nom du fichier texte contenant les mots : ");
+                scanf("%199s", fichier2);
+
+                lireAutomate(&a, fichier);
+                afficherMotsAutomateMinimal(&a, fichier2);
                 break;
 
             case 0:
@@ -1253,6 +1791,9 @@ case 10:
     libererAutomate(&a);
     libererAutomate(&b);
     libererAutomate(&res);
+    libererAutomate(&det);
+    libererAutomate(&min);
+    libererAutomate(&prod);
 
     return 0;
 }
